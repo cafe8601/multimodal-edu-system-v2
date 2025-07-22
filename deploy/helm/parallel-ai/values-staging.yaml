@@ -1,0 +1,165 @@
+# Staging environment values for parallel-ai
+
+# Environment-specific settings
+environment: staging
+replicaCount: 1
+
+# Reduced resource allocation for staging
+services:
+  apiService:
+    replicaCount: 2
+    resources:
+      limits:
+        cpu: 500m
+        memory: 512Mi
+      requests:
+        cpu: 250m
+        memory: 256Mi
+    autoscaling:
+      enabled: true
+      minReplicas: 2
+      maxReplicas: 4
+      targetCPUUtilizationPercentage: 80
+
+  workerService:
+    replicaCount: 2
+    resources:
+      limits:
+        cpu: 1000m
+        memory: 1Gi
+      requests:
+        cpu: 500m
+        memory: 512Mi
+    autoscaling:
+      enabled: true
+      minReplicas: 2
+      maxReplicas: 6
+      targetCPUUtilizationPercentage: 80
+
+  frontend:
+    replicaCount: 1
+    resources:
+      limits:
+        cpu: 250m
+        memory: 256Mi
+      requests:
+        cpu: 100m
+        memory: 128Mi
+    autoscaling:
+      enabled: true
+      minReplicas: 1
+      maxReplicas: 3
+      targetCPUUtilizationPercentage: 80
+
+  orchestrator:
+    replicaCount: 1
+    resources:
+      limits:
+        cpu: 500m
+        memory: 512Mi
+      requests:
+        cpu: 250m
+        memory: 256Mi
+
+  # AI Agents - reduced for staging
+  agents:
+    textProcessing:
+      replicaCount: 1
+      resources:
+        limits:
+          cpu: 750m
+          memory: 1Gi
+        requests:
+          cpu: 375m
+          memory: 512Mi
+
+    imageAnalysis:
+      replicaCount: 1
+      resources:
+        limits:
+          cpu: 1000m
+          memory: 2Gi
+        requests:
+          cpu: 500m
+          memory: 1Gi
+
+    conversation:
+      replicaCount: 2
+      resources:
+        limits:
+          cpu: 500m
+          memory: 750Mi
+        requests:
+          cpu: 250m
+          memory: 512Mi
+
+    taskCoordinator:
+      replicaCount: 1
+      resources:
+        limits:
+          cpu: 250m
+          memory: 256Mi
+        requests:
+          cpu: 125m
+          memory: 128Mi
+
+# Staging ingress
+ingress:
+  hosts:
+    - host: api-staging.parallel-ai.com
+      paths:
+        - path: /
+          pathType: Prefix
+          service: api-service
+    - host: app-staging.parallel-ai.com
+      paths:
+        - path: /
+          pathType: Prefix
+          service: frontend
+  tls:
+    - secretName: parallel-ai-staging-tls
+      hosts:
+        - api-staging.parallel-ai.com
+        - app-staging.parallel-ai.com
+
+# Smaller persistent storage for staging
+persistence:
+  size: 20Gi
+
+redis:
+  master:
+    persistence:
+      size: 2Gi
+    resources:
+      limits:
+        cpu: 250m
+        memory: 512Mi
+      requests:
+        cpu: 125m
+        memory: 256Mi
+  replica:
+    replicaCount: 1
+
+postgresql:
+  primary:
+    persistence:
+      size: 10Gi
+    resources:
+      limits:
+        cpu: 500m
+        memory: 1Gi
+      requests:
+        cpu: 250m
+        memory: 512Mi
+  readReplicas:
+    replicaCount: 0
+
+# Reduced monitoring for staging
+monitoring:
+  prometheus:
+    server:
+      persistentVolume:
+        size: 5Gi
+  grafana:
+    persistence:
+      size: 2Gi

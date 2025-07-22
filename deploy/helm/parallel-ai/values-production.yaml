@@ -1,0 +1,285 @@
+# Production environment values for parallel-ai
+
+# Environment-specific settings
+environment: production
+replicaCount: 5
+
+# High-availability configuration
+services:
+  apiService:
+    replicaCount: 5
+    resources:
+      limits:
+        cpu: 2000m
+        memory: 2Gi
+      requests:
+        cpu: 1000m
+        memory: 1Gi
+    autoscaling:
+      enabled: true
+      minReplicas: 5
+      maxReplicas: 20
+      targetCPUUtilizationPercentage: 60
+      targetMemoryUtilizationPercentage: 70
+
+  workerService:
+    replicaCount: 10
+    resources:
+      limits:
+        cpu: 4000m
+        memory: 4Gi
+      requests:
+        cpu: 2000m
+        memory: 2Gi
+    autoscaling:
+      enabled: true
+      minReplicas: 10
+      maxReplicas: 50
+      targetCPUUtilizationPercentage: 65
+
+  frontend:
+    replicaCount: 3
+    resources:
+      limits:
+        cpu: 1000m
+        memory: 1Gi
+      requests:
+        cpu: 500m
+        memory: 512Mi
+    autoscaling:
+      enabled: true
+      minReplicas: 3
+      maxReplicas: 15
+      targetCPUUtilizationPercentage: 60
+
+  orchestrator:
+    replicaCount: 3
+    resources:
+      limits:
+        cpu: 2000m
+        memory: 2Gi
+      requests:
+        cpu: 1000m
+        memory: 1Gi
+
+  # AI Agents - production scale
+  agents:
+    textProcessing:
+      replicaCount: 8
+      resources:
+        limits:
+          cpu: 3000m
+          memory: 4Gi
+        requests:
+          cpu: 1500m
+          memory: 2Gi
+
+    imageAnalysis:
+      replicaCount: 6
+      resources:
+        limits:
+          cpu: 4000m
+          memory: 8Gi
+          nvidia.com/gpu: 1
+        requests:
+          cpu: 2000m
+          memory: 4Gi
+
+    conversation:
+      replicaCount: 10
+      resources:
+        limits:
+          cpu: 2000m
+          memory: 3Gi
+        requests:
+          cpu: 1000m
+          memory: 2Gi
+
+    taskCoordinator:
+      replicaCount: 4
+      resources:
+        limits:
+          cpu: 1000m
+          memory: 1Gi
+        requests:
+          cpu: 500m
+          memory: 512Mi
+
+# Production ingress with advanced features
+ingress:
+  annotations:
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    nginx.ingress.kubernetes.io/rate-limit: "1000"
+    nginx.ingress.kubernetes.io/rate-limit-window: "1m"
+    nginx.ingress.kubernetes.io/enable-cors: "true"
+    nginx.ingress.kubernetes.io/cors-allow-origin: "https://parallel-ai.com"
+    nginx.ingress.kubernetes.io/use-gzip: "true"
+    nginx.ingress.kubernetes.io/proxy-body-size: "100m"
+  hosts:
+    - host: api.parallel-ai.com
+      paths:
+        - path: /
+          pathType: Prefix
+          service: api-service
+    - host: app.parallel-ai.com
+      paths:
+        - path: /
+          pathType: Prefix
+          service: frontend
+  tls:
+    - secretName: parallel-ai-prod-tls
+      hosts:
+        - api.parallel-ai.com
+        - app.parallel-ai.com
+
+# Production storage configuration
+persistence:
+  enabled: true
+  storageClass: "gp3"
+  size: 500Gi
+
+redis:
+  auth:
+    enabled: true
+  master:
+    persistence:
+      enabled: true
+      storageClass: "gp3"
+      size: 50Gi
+    resources:
+      limits:
+        cpu: 2000m
+        memory: 4Gi
+      requests:
+        cpu: 1000m
+        memory: 2Gi
+  replica:
+    replicaCount: 3
+    persistence:
+      enabled: true
+      storageClass: "gp3"
+      size: 50Gi
+
+postgresql:
+  auth:
+    existingSecret: "postgresql-prod-secret"
+  primary:
+    persistence:
+      enabled: true
+      storageClass: "gp3"
+      size: 200Gi
+    resources:
+      limits:
+        cpu: 4000m
+        memory: 8Gi
+      requests:
+        cpu: 2000m
+        memory: 4Gi
+  readReplicas:
+    replicaCount: 2
+    persistence:
+      enabled: true
+      storageClass: "gp3"
+      size: 200Gi
+
+# Comprehensive monitoring for production
+monitoring:
+  enabled: true
+  prometheus:
+    enabled: true
+    server:
+      persistentVolume:
+        enabled: true
+        storageClass: "gp3"
+        size: 100Gi
+      resources:
+        limits:
+          cpu: 2000m
+          memory: 4Gi
+        requests:
+          cpu: 1000m
+          memory: 2Gi
+      retention: "30d"
+  grafana:
+    enabled: true
+    persistence:
+      enabled: true
+      storageClass: "gp3"
+      size: 20Gi
+    resources:
+      limits:
+        cpu: 1000m
+        memory: 2Gi
+      requests:
+        cpu: 500m
+        memory: 1Gi
+  alerts:
+    enabled: true
+    slack:
+      webhook: "${SLACK_WEBHOOK_URL}"
+      channel: "#production-alerts"
+    pagerduty:
+      enabled: true
+      routingKey: "${PAGERDUTY_ROUTING_KEY}"
+
+# Enhanced security for production
+networkPolicy:
+  enabled: true
+  ingress:
+    enabled: true
+    rules:
+      - from:
+          - namespaceSelector:
+              matchLabels:
+                name: ingress-nginx
+      - from:
+          - namespaceSelector:
+              matchLabels:
+                name: monitoring
+  egress:
+    enabled: true
+    rules:
+      - to:
+          - namespaceSelector:
+              matchLabels:
+                name: kube-system
+      - to: []
+        ports:
+          - protocol: TCP
+            port: 443
+          - protocol: TCP
+            port: 80
+
+# Production-grade pod disruption budgets
+podDisruptionBudget:
+  enabled: true
+  minAvailable: "50%"
+
+# Node affinity for production workloads
+affinity:
+  nodeAffinity:
+    requiredDuringSchedulingIgnoredDuringExecution:
+      nodeSelectorTerms:
+        - matchExpressions:
+            - key: node.kubernetes.io/instance-type
+              operator: In
+              values:
+                - c5.xlarge
+                - c5.2xlarge
+                - c5.4xlarge
+  podAntiAffinity:
+    requiredDuringSchedulingIgnoredDuringExecution:
+      - labelSelector:
+          matchExpressions:
+            - key: app.kubernetes.io/name
+              operator: In
+              values:
+                - parallel-ai
+        topologyKey: kubernetes.io/hostname
+
+# Production tolerations
+tolerations:
+  - key: "production-workload"
+    operator: "Equal"
+    value: "true"
+    effect: "NoSchedule"

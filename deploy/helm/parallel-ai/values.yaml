@@ -1,0 +1,332 @@
+# Default values for parallel-ai
+# This is a YAML-formatted file.
+
+# Global settings
+global:
+  imageRegistry: ghcr.io
+  repository: parallel-ai/parallel-ai-system
+  tag: latest
+  pullPolicy: IfNotPresent
+  storageClass: "gp3"
+
+# Environment configuration
+environment: production
+replicaCount: 3
+
+# Image pull secrets
+imagePullSecrets:
+  - name: ghcr-secret
+
+# Service account
+serviceAccount:
+  create: true
+  annotations: {}
+  name: ""
+
+# Pod security context
+podSecurityContext:
+  fsGroup: 1000
+  runAsNonRoot: true
+  runAsUser: 1000
+
+# Security context
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  runAsNonRoot: true
+  runAsUser: 1000
+  capabilities:
+    drop:
+      - ALL
+
+# Services configuration
+services:
+  apiService:
+    enabled: true
+    replicaCount: 3
+    image:
+      repository: api-service
+      tag: latest
+    service:
+      type: ClusterIP
+      port: 8000
+      targetPort: 8000
+    resources:
+      limits:
+        cpu: 1000m
+        memory: 1Gi
+      requests:
+        cpu: 500m
+        memory: 512Mi
+    autoscaling:
+      enabled: true
+      minReplicas: 3
+      maxReplicas: 10
+      targetCPUUtilizationPercentage: 70
+      targetMemoryUtilizationPercentage: 80
+    livenessProbe:
+      httpGet:
+        path: /health
+        port: 8000
+      initialDelaySeconds: 30
+      periodSeconds: 10
+    readinessProbe:
+      httpGet:
+        path: /ready
+        port: 8000
+      initialDelaySeconds: 5
+      periodSeconds: 5
+    env:
+      - name: ENVIRONMENT
+        value: "production"
+      - name: LOG_LEVEL
+        value: "INFO"
+
+  workerService:
+    enabled: true
+    replicaCount: 5
+    image:
+      repository: worker-service
+      tag: latest
+    resources:
+      limits:
+        cpu: 2000m
+        memory: 2Gi
+      requests:
+        cpu: 1000m
+        memory: 1Gi
+    autoscaling:
+      enabled: true
+      minReplicas: 5
+      maxReplicas: 20
+      targetCPUUtilizationPercentage: 75
+    env:
+      - name: WORKER_TYPE
+        value: "general"
+      - name: MAX_CONCURRENT_TASKS
+        value: "10"
+
+  frontend:
+    enabled: true
+    replicaCount: 2
+    image:
+      repository: frontend
+      tag: latest
+    service:
+      type: ClusterIP
+      port: 3000
+      targetPort: 3000
+    resources:
+      limits:
+        cpu: 500m
+        memory: 512Mi
+      requests:
+        cpu: 200m
+        memory: 256Mi
+    autoscaling:
+      enabled: true
+      minReplicas: 2
+      maxReplicas: 8
+      targetCPUUtilizationPercentage: 70
+
+  orchestrator:
+    enabled: true
+    replicaCount: 2
+    image:
+      repository: orchestrator
+      tag: latest
+    resources:
+      limits:
+        cpu: 1000m
+        memory: 1Gi
+      requests:
+        cpu: 500m
+        memory: 512Mi
+
+  # AI Agents
+  agents:
+    textProcessing:
+      enabled: true
+      replicaCount: 3
+      image:
+        repository: text-processing-agent
+        tag: latest
+      resources:
+        limits:
+          cpu: 1500m
+          memory: 2Gi
+        requests:
+          cpu: 750m
+          memory: 1Gi
+
+    imageAnalysis:
+      enabled: true
+      replicaCount: 2
+      image:
+        repository: image-analysis-agent
+        tag: latest
+      resources:
+        limits:
+          cpu: 2000m
+          memory: 4Gi
+          nvidia.com/gpu: 1
+        requests:
+          cpu: 1000m
+          memory: 2Gi
+
+    conversation:
+      enabled: true
+      replicaCount: 4
+      image:
+        repository: conversation-agent
+        tag: latest
+      resources:
+        limits:
+          cpu: 1000m
+          memory: 1.5Gi
+        requests:
+          cpu: 500m
+          memory: 1Gi
+
+    taskCoordinator:
+      enabled: true
+      replicaCount: 2
+      image:
+        repository: task-coordinator
+        tag: latest
+      resources:
+        limits:
+          cpu: 500m
+          memory: 512Mi
+        requests:
+          cpu: 250m
+          memory: 256Mi
+
+# Ingress configuration
+ingress:
+  enabled: true
+  className: "nginx"
+  annotations:
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    nginx.ingress.kubernetes.io/rate-limit: "100"
+    nginx.ingress.kubernetes.io/rate-limit-window: "1m"
+  hosts:
+    - host: api.parallel-ai.com
+      paths:
+        - path: /
+          pathType: Prefix
+          service: api-service
+    - host: app.parallel-ai.com
+      paths:
+        - path: /
+          pathType: Prefix
+          service: frontend
+  tls:
+    - secretName: parallel-ai-tls
+      hosts:
+        - api.parallel-ai.com
+        - app.parallel-ai.com
+
+# Persistent storage
+persistence:
+  enabled: true
+  storageClass: "gp3"
+  accessMode: ReadWriteOnce
+  size: 100Gi
+
+# Redis configuration
+redis:
+  enabled: true
+  auth:
+    enabled: true
+    existingSecret: "redis-secret"
+  master:
+    persistence:
+      enabled: true
+      storageClass: "gp3"
+      size: 8Gi
+    resources:
+      limits:
+        cpu: 500m
+        memory: 1Gi
+      requests:
+        cpu: 250m
+        memory: 512Mi
+  replica:
+    replicaCount: 2
+    persistence:
+      enabled: true
+      storageClass: "gp3"
+      size: 8Gi
+
+# PostgreSQL configuration
+postgresql:
+  enabled: true
+  auth:
+    existingSecret: "postgresql-secret"
+  primary:
+    persistence:
+      enabled: true
+      storageClass: "gp3"
+      size: 50Gi
+    resources:
+      limits:
+        cpu: 1000m
+        memory: 2Gi
+      requests:
+        cpu: 500m
+        memory: 1Gi
+  readReplicas:
+    replicaCount: 1
+
+# Monitoring configuration
+monitoring:
+  enabled: true
+  prometheus:
+    enabled: true
+    server:
+      persistentVolume:
+        enabled: true
+        storageClass: "gp3"
+        size: 20Gi
+  grafana:
+    enabled: true
+    persistence:
+      enabled: true
+      storageClass: "gp3"
+      size: 10Gi
+    adminPassword: "admin123"
+  alerts:
+    enabled: true
+    slack:
+      webhook: ""
+      channel: "#alerts"
+
+# Network policies
+networkPolicy:
+  enabled: true
+  ingress:
+    enabled: true
+  egress:
+    enabled: true
+
+# Pod disruption budget
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 1
+
+# Node affinity and tolerations
+nodeSelector: {}
+tolerations: []
+affinity:
+  podAntiAffinity:
+    preferredDuringSchedulingIgnoredDuringExecution:
+      - weight: 100
+        podAffinityTerm:
+          labelSelector:
+            matchExpressions:
+              - key: app.kubernetes.io/name
+                operator: In
+                values:
+                  - parallel-ai
+          topologyKey: kubernetes.io/hostname
